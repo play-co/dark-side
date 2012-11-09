@@ -3,16 +3,19 @@ import requests
 import json
 import argparse
 import sys
+import logging
+import json_tools
 from gevent.pywsgi import WSGIHandler, WSGIServer
 
 class Handler(object):
 
-    def __init__(self,hosts):
-        self._hosts = hosts
+    def __init__(self,master,apprentices):
+        self._master = master
+        self._apprentices = apprentices
 
-    @property
-    def downstream_servers(self):
-        return self._hosts
+        self._mismatch_log = logging.getLogger("darkside-mismatch")
+        self._mismatch_log.setLevel(logging.INFO)
+        self._mismatch_log.addHandler(logging.FileHandler('darkside-mismatch.log'))
 
     def __call__(self,environ,start_response):
 
@@ -21,7 +24,11 @@ class Handler(object):
         method = environ['REQUEST_METHOD']
 
         all_bodies = []
-        for server in self.downstream_servers:
+        all_servers =  [ self._master]  + self._apprentices
+        master_response = None
+        master_body = None
+
+        for server in all_servers:
             req = self.make_request(environ, server)
             req.send()
             this_body = req.response.content
@@ -30,15 +37,20 @@ class Handler(object):
             except ValueError, e: 
                 this_response = this_body 
 
-            for other_body in all_bodies:
-                if not this_response == other_body:
-                    print '\noh snap, mismatch in two bodies!\n: %s?%s\n'% (path, query_string)
+            if server == self._master:
+                master_response = req.response
+                master_body = this_response
+
+            if not this_response == master_body:
+                self._mismatch_log.info('apprentice %s failed fetching %s?%s' % (server, path,query_string))
+                if isinstance(this_response, dict) and isinstance(master_body, dict):
+                    diff =  json_tools.diff(this_response,master_body)
             all_bodies.append(this_response)
 
-        if all_bodies:
-            status = '%s %s' % (req.response.status_code, req.response.reason)
-            start_response(status,req.response.headers.items())
-            return this_body
+        if master_response:
+            status = '%s %s' % (master_response.status_code, master_response.reason)
+            start_response(status,master_response.headers.items())
+            return master_response.content
         else:
             start_response('200 OK',[])
             return 'fudgesickles'
@@ -49,9 +61,23 @@ class Handler(object):
                                 params=environ['QUERY_STRING'])
 
 def main():
-    parser = argparse.ArgumentParser(description='compare multiple server\'s responses')
-    parser.add_argument('--host',action='append',dest='hosts',help='include this host in the comparison')
+    #set up the arguments parser
+    parser = argparse.ArgumentParser(description='run a proxy server that compares response from the master to responses returned by any number of apprentices')
+    parser.add_argument('master',help="return this server's response")
+    parser.add_argument('--apprentice',action='append',dest='apprentices',
+        help="compare this host's response to the master's. use this argument multiple times for multiple apprentices.")
+    parser.add_argument('--port',help='listen on this port',type=int,default=8987)
+    #now parse that shit
     args = parser.parse_args()
-    WSGIServer(('127.0.0.1',8888),Handler(args.hosts)).serve_forever()
+    
+    #set up the logger
+    logging.basicConfig()
+
+    print 'dark side: listening on port %s for your deepest fears and worries' % args.port
+    print 'master:'
+    print '\t',args.master 
+    print 'apprentices:'
+    print '\t'+(' '.join(args.apprentices))
+    WSGIServer(('127.0.0.1',args.port),Handler(args.master, args.apprentices)).serve_forever()
 
 if __name__ == "__main__" : main()
