@@ -35,10 +35,12 @@ class Handler(object):
                     print '\noh snap, mismatch in two bodies!\n: %s?%s\n'% (path, query_string)
             all_bodies.append(this_response)
 
-        start_response('200 OK',[])
         if all_bodies:
-            return all_bodies[-1]
+            status = '%s %s' % (req.response.status_code, req.response.reason)
+            start_response(status,req.response.headers.items())
+            return this_body
         else:
+            start_response('200 OK',[])
             return 'fudgesickles'
 
     def make_request(self, environ, for_server):
@@ -46,14 +48,10 @@ class Handler(object):
                                 method=environ['REQUEST_METHOD'],
                                 params=environ['QUERY_STRING'])
 
-
 def main():
     parser = argparse.ArgumentParser(description='compare multiple server\'s responses')
-    parser.add_argument('--hosts',action='append',dest='hosts')
+    parser.add_argument('--host',action='append',dest='hosts',help='include this host in the comparison')
     args = parser.parse_args()
-
-    print 'now comparing hosts', args.hosts
-
     WSGIServer(('127.0.0.1',8888),Handler(args.hosts)).serve_forever()
 
 if __name__ == "__main__" : main()
