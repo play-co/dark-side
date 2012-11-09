@@ -5,6 +5,7 @@ import argparse
 import sys
 import logging
 import json_tools
+from webob import Request
 from gevent.pywsgi import WSGIHandler, WSGIServer
 
 class Handler(object):
@@ -15,13 +16,14 @@ class Handler(object):
 
         self._mismatch_log = logging.getLogger("darkside-mismatch")
         self._mismatch_log.setLevel(logging.INFO)
-        self._mismatch_log.addHandler(logging.FileHandler('darkside-mismatch.log'))
+        file_handler = logging.FileHandler('darkside-mismatch.log')
+        file_handler.setFormatter(logging.Formatter('%(asctime)s\n----\n%(message)s'))
+        self._mismatch_log.addHandler(file_handler)
 
     def __call__(self,environ,start_response):
 
-        path = environ['PATH_INFO'] 
-        query_string = environ['QUERY_STRING']
-        method = environ['REQUEST_METHOD']
+
+        incoming = Request(environ)
 
         all_bodies = []
         all_servers =  [ self._master]  + self._apprentices
@@ -29,7 +31,7 @@ class Handler(object):
         master_body = None
 
         for server in all_servers:
-            req = self.make_request(environ, server)
+            req = self.make_request(incoming, server)
             req.send()
             this_body = req.response.content
             try:
@@ -42,7 +44,8 @@ class Handler(object):
                 master_body = this_response
 
             if not this_response == master_body:
-                self._mismatch_log.info('apprentice %s failed fetching %s?%s' % (server, path,query_string))
+                self._mismatch_log.info('apprentice %s failed fetching %s?%s:\n----\n%s\n---vs---\n%s' %
+                 (server, incoming.path,incoming.query_string, this_response, master_body))
                 if isinstance(this_response, dict) and isinstance(master_body, dict):
                     diff =  json_tools.diff(this_response,master_body)
             all_bodies.append(this_response)
@@ -55,10 +58,10 @@ class Handler(object):
             start_response('200 OK',[])
             return 'fudgesickles'
 
-    def make_request(self, environ, for_server):
-        return requests.Request(url=for_server+environ['PATH_INFO'],
-                                method=environ['REQUEST_METHOD'],
-                                params=environ['QUERY_STRING'])
+    def make_request(self, incoming_request, for_server):
+        return requests.Request(url=for_server+incoming_request.path,
+                                method=incoming_request.method,
+                                params=dict(incoming_request.GET.items()))
 
 def main():
     #set up the arguments parser
