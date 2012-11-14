@@ -5,8 +5,15 @@ a response-comparing proxy server made of pure evil
 you can use it to test out a new apprentice, to make sure it responds to all queries the same way master does.
 
 ##setup
+use pip:
 
-`pip install -r requirements.txt`
+    pip install dark-side
+
+or clone this repo, then run:
+
+    pip install -r requirements.txt
+    python setup.py install
+
 
 ##usage
 
@@ -14,7 +21,7 @@ suppose you have an existing api at api.legitimate-business.com, and you want to
 
 run
 
-`python server.py api.legitimate-business.com --apprentice new-api.legitimate-business.com`
+`python darkside.py api.legitimate-business.com --apprentice new-api.legitimate-business.com`
 
 and darkside will listen on port 8987 (change that with --port). 
 
