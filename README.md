@@ -25,7 +25,7 @@ run
 
 and darkside will listen on port 8987 (change that with --port). 
 
-when you request localhost:8987/some/resource, darkside will fetch both api.legitimate-business.com/some/resource and new-api.legitimate-business.com/some/resource, and compare the two. if they are different, darkside will make an entry in darkside-mismatch.log as well as print to the console.
+when you request localhost:8987/some/resource, darkside will fetch both api.legitimate-business.com/some/resource and new-api.legitimate-business.com/some/resource, and compare the two. if they are different, darkside will make an entry in darkside-mismatch.log as well as print to the console. darkside will always return the response given by the master, regardless of what those apprentices say. this way, you can test apprentice respones to real requests!
 
 there's no limit to the number of apprentices you can take on - but don't go crazy, those guys get annoying when they're all "master master, please tell me more divine secrets" all the time. 
 
